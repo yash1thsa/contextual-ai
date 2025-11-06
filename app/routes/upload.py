@@ -6,7 +6,7 @@ from app.services.parser import parse_pdf_to_text_blocks
 from app.services.chunker import chunk_text_blocks
 from app.services.encoder import encode_chunks
 from app.db.transactional_db import SessionLocal
-from app.models.models import DocumentChunk
+from app.models.chunk_model import DocumentChunk
 from app.db.vector_store import upsert_vectors
 from sqlalchemy.exc import SQLAlchemyError
 
