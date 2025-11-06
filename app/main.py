@@ -1,12 +1,10 @@
 from fastapi import FastAPI
-from app.routes.upload import router as upload_router
+from app.routes import upload, query
 
+app = FastAPI()
 
-app = FastAPI(title="PDF Ingest Service")
-
-
-app.include_router(upload_router, prefix="/upload", tags=["upload"])
-
+app.include_router(upload.router, prefix="/upload")
+app.include_router(query.router, prefix="/query")
 
 @app.get("/")
 async def root():
