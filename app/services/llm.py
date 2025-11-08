@@ -9,7 +9,7 @@ logger.setLevel(logging.INFO)
 
 LLM_BACKEND = os.getenv("LLM_BACKEND", "ollama").lower()
 OLLAMA_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434")
-OLLAMA_LLM_MODEL = os.getenv("OLLAMA_LLM_MODEL", "mistral")  # default model
+OLLAMA_LLM_MODEL = os.getenv("OLLAMA_LLM_MODEL", "phi3:mini")  # default model
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 
