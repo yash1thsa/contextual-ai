@@ -1,4 +1,3 @@
-# app.py
 import os
 import streamlit as st
 import requests
@@ -6,7 +5,6 @@ import json
 from typing import List, Dict, Any
 
 # ----------------- Streamlit Config -----------------
-port = int(os.environ.get("PORT", 8501))
 st.set_page_config(page_title="Chat-to-URL", layout="centered")
 
 # ----------------- Utility functions -----------------
@@ -137,17 +135,3 @@ with st.form(key="chat_form", clear_on_submit=True):
 # Re-render chat
 with chat_box:
     render_chat()
-
-# ----------------- Entrypoint for Render -----------------
-# This allows Streamlit to run on the dynamic PORT Render provides
-if __name__ == "__main__":
-    import streamlit.web.bootstrap
-    streamlit.web.bootstrap.run(
-        "app.py",  # Path to this file
-        "",
-        [],
-        None,
-        False,
-        False,
-        port=port
-    )
