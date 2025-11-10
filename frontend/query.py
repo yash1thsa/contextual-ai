@@ -1,12 +1,15 @@
 # app.py
+import os
 import streamlit as st
 import requests
 import json
 from typing import List, Dict, Any
 
+# ----------------- Streamlit Config -----------------
+port = int(os.environ.get("PORT", 8501))
 st.set_page_config(page_title="Chat-to-URL", layout="centered")
 
-# --- Utility functions ----------------------------------------------------
+# ----------------- Utility functions -----------------
 def post_question(
     url: str,
     question_field: str,
@@ -15,11 +18,6 @@ def post_question(
     headers: dict,
     timeout: int = 30,
 ) -> dict:
-    """
-    Send POST to the target URL. Payload format:
-      { question_field: "<user question>", "history": [ {"role":"user","text":"..."}, ... ] }
-    Returns a dict with keys: {"ok": bool, "status_code": int, "response": ...}
-    """
     payload = {question_field: question, "history": history}
     try:
         resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
@@ -35,10 +33,9 @@ def post_question(
     except Exception:
         return {"ok": resp.ok, "status_code": resp.status_code, "response": resp.text}
 
-
 def init_state():
     if "history" not in st.session_state:
-        st.session_state.history = []  # list of {"role": "user"|"bot", "text": "..."}
+        st.session_state.history = []
     if "url" not in st.session_state:
         st.session_state.url = ""
     if "token" not in st.session_state:
@@ -48,27 +45,22 @@ def init_state():
     if "_extra_headers" not in st.session_state:
         st.session_state._extra_headers = {}
 
-# --- Layout / UI ----------------------------------------------------------
+# ----------------- Layout -----------------
 init_state()
 st.title("💬 Chat-to-URL — Streamlit Chat Client")
 
-# --- Sidebar ---
+# Sidebar
 with st.sidebar:
     st.header("Settings")
-    st.session_state.url = st.text_input(
-        "Target URL", st.session_state.url, placeholder="https://example.com/api/chat"
-    )
-    st.session_state.token = st.text_input(
-        "Bearer token (optional)", st.session_state.token, type="password"
-    )
-    st.session_state.question_field = st.text_input(
-        "Question JSON field name", st.session_state.question_field
-    )
+    st.session_state.url = st.text_input("Target URL", st.session_state.url,
+                                         placeholder="https://example.com/api/chat")
+    st.session_state.token = st.text_input("Bearer token (optional)", st.session_state.token,
+                                           type="password")
+    st.session_state.question_field = st.text_input("Question JSON field name", st.session_state.question_field)
     st.write("Extra request headers (JSON)")
-    extra_headers_text = st.text_area(
-        "Extra headers", value=json.dumps(st.session_state._extra_headers, indent=2),
-        help="Example: {\n  \"X-My-Header\": \"value\"\n}"
-    )
+    extra_headers_text = st.text_area("Extra headers",
+                                      value=json.dumps(st.session_state._extra_headers, indent=2),
+                                      help="Example: {\"X-My-Header\": \"value\"}")
     try:
         st.session_state._extra_headers = json.loads(extra_headers_text) if extra_headers_text.strip() else {}
     except Exception:
@@ -84,13 +76,13 @@ with st.sidebar:
         if st.session_state.history:
             st.session_state.history.pop()
 
-# --- Build headers ---
+# Build headers
 headers = {}
 if st.session_state.token:
     headers["Authorization"] = f"Bearer {st.session_state.token}"
 headers.update(st.session_state._extra_headers)
 
-# --- Chat rendering --------------------------------------------------------
+# Chat rendering
 def render_chat():
     for msg in st.session_state.history:
         if msg["role"] == "user":
@@ -103,7 +95,7 @@ chat_box = st.container()
 with chat_box:
     render_chat()
 
-# --- Input form ------------------------------------------------------------
+# Input form
 st.markdown("---")
 with st.form(key="chat_form", clear_on_submit=True):
     question = st.text_input("Ask a question", placeholder="Type your question here...")
@@ -115,7 +107,6 @@ with st.form(key="chat_form", clear_on_submit=True):
         elif not q:
             st.error("Enter a non-empty question.")
         else:
-            # append user message
             st.session_state.history.append({"role": "user", "text": q})
             simple_history = [{"role": m["role"], "text": m["text"]} for m in st.session_state.history]
             with st.spinner("Sending..."):
@@ -143,6 +134,20 @@ with st.form(key="chat_form", clear_on_submit=True):
 
             st.session_state.history.append({"role": "bot", "text": bot_text})
 
-# Re-render chat after new message
+# Re-render chat
 with chat_box:
     render_chat()
+
+# ----------------- Entrypoint for Render -----------------
+# This allows Streamlit to run on the dynamic PORT Render provides
+if __name__ == "__main__":
+    import streamlit.web.bootstrap
+    streamlit.web.bootstrap.run(
+        "app.py",  # Path to this file
+        "",
+        [],
+        None,
+        False,
+        False,
+        port=port
+    )

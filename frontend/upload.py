@@ -1,9 +1,10 @@
 import streamlit as st
 import requests
 
-st.title("📤 File Upload Client")
+st.set_page_config(page_title="File Upload Client", layout="centered")
 
-# Input for your upload target
+st.title("Contextual AI document uploader")
+
 url = st.text_input("Enter the target upload URL")
 
 uploaded_file = st.file_uploader("Choose a file", type=None)
@@ -16,9 +17,9 @@ if uploaded_file is not None:
             st.error("Please enter a target URL.")
         else:
             try:
-                # Send multipart/form-data POST
-                files = {"file": (uploaded_file.name, uploaded_file, uploaded_file.type)}
-                response = requests.post(url, files=files)
+                # Streamlit file uploader returns BytesIO; ensure correct MIME type
+                files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
+                response = requests.post(url, files=files, timeout=60)
 
                 if response.status_code == 200:
                     st.success("✅ File uploaded successfully!")
