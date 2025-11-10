@@ -1,26 +1,55 @@
 import os
 import logging
-import requests
 from typing import List
+import requests
+
+from sentence_transformers import SentenceTransformer, util
 
 logger = logging.getLogger("llm")
 logger.setLevel(logging.INFO)
 
 # ---------------- ENV CONFIG ----------------
-LLM_BACKEND = os.getenv("LLM_BACKEND", "ollama").lower()
+LLM_BACKEND = os.getenv("LLM_BACKEND", "local").lower()  # default: local
 OLLAMA_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434")
-OLLAMA_LLM_MODEL = os.getenv("OLLAMA_LLM_MODEL", "phi3:mini")  # default model
-
+OLLAMA_LLM_MODEL = os.getenv("OLLAMA_LLM_MODEL", "phi3:mini")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-HF_API_TOKEN = os.getenv("HF_API_TOKEN")  # optional, for Hugging Face models
-HF_MODEL = os.getenv("HF_MODEL", "microsoft/Phi-3-mini-4k-instruct")  # default HF model
+
+# Load local embedding model once
+LOCAL_MODEL_NAME = os.getenv("LOCAL_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
+logger.info(f"Loading local SentenceTransformer model: {LOCAL_MODEL_NAME}")
+_local_model = SentenceTransformer(LOCAL_MODEL_NAME)
+
+
+# ---------- Local MiniLM Embedding + Similarity ----------
+def _answer_local(query: str, context_chunks: List[dict]) -> str:
+    """
+    Finds the most semantically similar chunk(s) using a local SBERT model
+    and returns a concise answer.
+    """
+    if not context_chunks:
+        return "No context provided."
+
+    # Encode query + all context chunks
+    texts = [c["text"] for c in context_chunks]
+    query_emb = _local_model.encode(query, convert_to_tensor=True)
+    context_embs = _local_model.encode(texts, convert_to_tensor=True)
+
+    # Compute similarity scores
+    scores = util.cos_sim(query_emb, context_embs)[0]
+    top_idx = int(scores.argmax())
+    best_chunk = context_chunks[top_idx]
+
+    answer = (
+        f"Based on page {best_chunk.get('page', '?')}, "
+        f"the most relevant section says:\n\n{best_chunk['text']}\n\n"
+        "This section seems most related to your question."
+    )
+    return answer
+
 
 # ---------- OpenAI ----------
 def _answer_openai(prompt: str, temperature: float = 0.0) -> str:
-    try:
-        from openai import OpenAI
-    except Exception as e:
-        raise RuntimeError("openai package not installed or import failed") from e
+    from openai import OpenAI
 
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY not set")
@@ -62,55 +91,39 @@ def _answer_ollama(prompt: str, temperature: float = 0.0) -> str:
         return str(data)
 
 
-# ---------- Hugging Face ----------
-def _answer_huggingface(prompt: str, temperature: float = 0.0) -> str:
-    """
-    Calls Hugging Face Inference API (works with free/token models).
-    You can set HF_MODEL and HF_API_TOKEN in .env
-    """
-    url = f"https://api-inference.huggingface.co/models/{HF_MODEL}"
-    headers = {"Content-Type": "application/json"}
-    if HF_API_TOKEN:
-        headers["Authorization"] = f"Bearer {HF_API_TOKEN}"
-
-    payload = {"inputs": prompt, "parameters": {"temperature": temperature}}
-
-    try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=60)
-        resp.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"Hugging Face API request failed: {e}")
-
-    try:
-        data = resp.json()
-        if isinstance(data, list) and "generated_text" in data[0]:
-            return data[0]["generated_text"].strip()
-        elif isinstance(data, dict) and "generated_text" in data:
-            return data["generated_text"].strip()
-        else:
-            return str(data)
-    except Exception as e:
-        logger.warning(f"Unexpected Hugging Face response format: {e}")
-        return str(resp.text)
-
-
 # ---------- Combined ----------
 def answer_with_context(query: str, context_chunks: List[dict]) -> str:
-    context_text = "\n\n---\n\n".join(
-        [f"Page {c['page']}:\n{c['text']}" for c in context_chunks]
-    )
-
-    prompt = (
-        "You are a helpful assistant that answers questions using only the provided context. "
-        "If the answer is not in the context, reply 'I don't know.' "
-        "Always mention the page number when referencing the document.\n\n"
-        f"Context:\n{context_text}\n\nQuestion: {query}\n\nAnswer:"
-    )
-
+    """
+    Chooses backend (local, ollama, openai) to generate or retrieve an answer.
+    """
     logger.info(f"Calling LLM backend={LLM_BACKEND}")
+
     if LLM_BACKEND == "ollama":
+        # Use a local LLM running in Ollama
+        context_text = "\n\n---\n\n".join(
+            [f"Page {c['page']}:\n{c['text']}" for c in context_chunks]
+        )
+        prompt = (
+            "You are a helpful assistant that answers questions using only the provided context. "
+            "If the answer is not in the context, reply 'I don't know.' "
+            "Always mention the page number when referencing the document.\n\n"
+            f"Context:\n{context_text}\n\nQuestion: {query}\n\nAnswer:"
+        )
         return _answer_ollama(prompt)
-    elif LLM_BACKEND == "huggingface":
-        return _answer_huggingface(prompt)
-    else:
+
+    elif LLM_BACKEND == "openai":
+        # Use OpenAI GPT for contextual reasoning
+        context_text = "\n\n---\n\n".join(
+            [f"Page {c['page']}:\n{c['text']}" for c in context_chunks]
+        )
+        prompt = (
+            "You are a helpful assistant that answers questions using only the provided context. "
+            "If the answer is not in the context, reply 'I don't know.' "
+            "Always mention the page number when referencing the document.\n\n"
+            f"Context:\n{context_text}\n\nQuestion: {query}\n\nAnswer:"
+        )
         return _answer_openai(prompt)
+
+    else:
+        # Default: simple semantic retrieval-based answer
+        return _answer_local(query, context_chunks)
