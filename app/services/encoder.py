@@ -2,7 +2,7 @@
 Provides `encode_chunks(list[str]) -> list[list[float]]`.
 
 Supports multiple backends:
-  - Hugging Face Inference API (default)
+  - Hugging Face local model (default)
   - SBERT (local)
   - OpenAI API
   - Ollama local embedding API
@@ -11,12 +11,13 @@ Supports multiple backends:
 import os
 from typing import List
 import requests
+import torch
 
 # Backend selection: hf | sbert | openai | ollama
 ENCODER_BACKEND = os.getenv("ENCODER_BACKEND", "hf")
 
 # Model names
-HF_EMBED_MODEL = os.getenv("HF_EMBED_MODEL", "nomic-ai/nomic-embed-text-v2-moe")
+HF_EMBED_MODEL = os.getenv("HF_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 SBERT_MODEL = os.getenv("SBERT_MODEL", "all-MiniLM-L6-v2")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "nomic-embed-text")
 
@@ -34,46 +35,35 @@ def encode_chunks(texts: List[str]) -> List[List[float]]:
     elif backend == "ollama":
         return _encode_ollama(texts)
     elif backend == "hf":
-        return _encode_hf(texts)
+        return _encode_hf_local(texts)
     else:
         raise ValueError(f"Unknown ENCODER_BACKEND: {backend}")
 
 
 # --------------------------------------------------------------------
-# Hugging Face Inference API (requires HF_TOKEN)
+# Hugging Face LOCAL embedding
 # --------------------------------------------------------------------
-def _encode_hf(texts: List[str]) -> List[List[float]]:
+def _encode_hf_local(texts: List[str]) -> List[List[float]]:
     """
-    Encodes text using Hugging Face Inference API.
-    Requires `HF_TOKEN` environment variable.
+    Encode text locally using a Hugging Face transformer model.
+    Works offline — no token or API calls needed.
     """
-    hf_token = os.getenv("HF_API_TOKEN")
-    if not hf_token:
-        raise RuntimeError("HF_TOKEN not set — required for Hugging Face API access.")
+    from transformers import AutoTokenizer, AutoModel
 
     model_name = HF_EMBED_MODEL
-    endpoint = f"https://api-inference.huggingface.co/models/{model_name}"
-    headers = {"Authorization": f"Bearer {hf_token}"}
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModel.from_pretrained(model_name)
 
-    vectors = []
+    embeddings = []
     for text in texts:
-        payload = {"inputs": text}
-        try:
-            response = requests.post(endpoint, headers=headers, json=payload, timeout=60)
-            response.raise_for_status()
-            data = response.json()
+        inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+        with torch.no_grad():
+            outputs = model(**inputs)
+            # Mean pooling
+            emb = outputs.last_hidden_state.mean(dim=1).squeeze().tolist()
+        embeddings.append(emb)
 
-            # HF API responses vary slightly depending on model
-            if isinstance(data, list) and isinstance(data[0], list):
-                vectors.append(data[0])
-            elif isinstance(data, dict) and "embedding" in data:
-                vectors.append(data["embedding"])
-            else:
-                raise ValueError(f"Unexpected HF API response: {data}")
-        except Exception as e:
-            raise RuntimeError(f"Hugging Face embedding failed: {e}")
-
-    return vectors
+    return embeddings
 
 
 # --------------------------------------------------------------------
