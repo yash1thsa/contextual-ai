@@ -136,16 +136,3 @@ with st.form(key="chat_form", clear_on_submit=True):
 # Re-render chat
 with chat_box:
     render_chat()
-
-# ----------------- Entrypoint for Render -----------------
-if __name__ == "__main__":
-    import streamlit.web.bootstrap
-    streamlit.web.bootstrap.run(
-        "app.py",  # this file
-        "",
-        [],
-        None,
-        False,
-        False,
-        port=PORT
-    )
