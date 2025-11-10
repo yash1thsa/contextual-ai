@@ -47,7 +47,7 @@ def _encode_hf(texts: List[str]) -> List[List[float]]:
     Encodes text using Hugging Face Inference API.
     Requires `HF_TOKEN` environment variable.
     """
-    hf_token = os.getenv("HF_TOKEN")
+    hf_token = os.getenv("HF_API_TOKEN")
     if not hf_token:
         raise RuntimeError("HF_TOKEN not set — required for Hugging Face API access.")
 
