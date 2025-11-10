@@ -19,7 +19,7 @@ if uploaded_file is not None:
             try:
                 # Streamlit file uploader returns BytesIO; ensure correct MIME type
                 files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
-                response = requests.post(url, files=files, timeout=60)
+                response = requests.post(url, files=files, timeout=300)
 
                 if response.status_code == 200:
                     st.success("✅ File uploaded successfully!")
