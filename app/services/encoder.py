@@ -16,6 +16,9 @@ import logging
 
 # Backend selection: hf | sbert | openai | ollama
 ENCODER_BACKEND = os.getenv("ENCODER_BACKEND", "hf")
+logger = logging.getLogger("pdf_upload")
+logger.setLevel(logging.DEBUG)
+
 
 # Model names
 HF_EMBED_MODEL = os.getenv("HF_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
@@ -28,7 +31,7 @@ def encode_chunks(texts: List[str]) -> List[List[float]]:
     Encode text chunks using the selected backend.
     """
     backend = ENCODER_BACKEND.lower()
-    logging.info(f"Backend found: {backend}")
+    logger.info(f"Backend found: {backend}")
 
     if backend == "openai":
         return _encode_openai(texts)
@@ -53,11 +56,11 @@ def _encode_hf_local(texts: List[str]) -> List[List[float]]:
     from transformers import AutoTokenizer, AutoModel
     embeddings = []
     try:
-        logging.info("Initializing local Hugging Face model...")
+        logger.info("Initializing local Hugging Face model...")
         model_name = HF_EMBED_MODEL
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         model = AutoModel.from_pretrained(model_name)
-        logging.info(f"Model '{model_name}' loaded successfully")
+        logger.info(f"Model '{model_name}' loaded successfully")
 
         for text in texts:
             try:
@@ -68,12 +71,12 @@ def _encode_hf_local(texts: List[str]) -> List[List[float]]:
                     emb = outputs.last_hidden_state.mean(dim=1).squeeze().tolist()
                 embeddings.append(emb)
             except Exception as e:
-                logging.error(f"Error encoding text '{text[:30]}...': {e}")
+                logger.error(f"Error encoding text '{text[:30]}...': {e}")
                 embeddings.append([])  # Append empty list for failed encoding
 
-        logging.info("Embeddings are ready")
+        logger.info("Embeddings are ready")
     except Exception as e:
-        logging.error(f"Failed to load model or encode texts: {e}")
+        logger.error(f"Failed to load model or encode texts: {e}")
 
     return embeddings
 
