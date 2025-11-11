@@ -28,6 +28,7 @@ def encode_chunks(texts: List[str]) -> List[List[float]]:
     Encode text chunks using the selected backend.
     """
     backend = ENCODER_BACKEND.lower()
+    logging.info(f"Backend found: {backend}")
 
     if backend == "openai":
         return _encode_openai(texts)
