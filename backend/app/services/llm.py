@@ -13,7 +13,7 @@ OLLAMA_LLM_MODEL = os.getenv("OLLAMA_LLM_MODEL", "phi3:mini")  # default model
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")  # optional, for Hugging Face models
-HF_MODEL = os.getenv("HF_MODEL", "microsoft/Phi-3-mini-4k-instruct")  # default HF model
+HF_MODEL = os.getenv("HF_MODEL", "meta-llama/Llama-2-7b-chat-hf")  # default HF model
 
 # ---------- OpenAI ----------
 def _answer_openai(prompt: str, temperature: float = 0.0) -> str:

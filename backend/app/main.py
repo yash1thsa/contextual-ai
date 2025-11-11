@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routes import upload, query
+from app.routes import query, upload
 
 app = FastAPI()
 
