@@ -2,6 +2,7 @@ import os
 import logging
 import requests
 from typing import List
+from huggingface_hub import InferenceClient
 
 logger = logging.getLogger("llm")
 logger.setLevel(logging.INFO)
@@ -63,36 +64,39 @@ def _answer_ollama(prompt: str, temperature: float = 0.0) -> str:
 
 
 # ---------- Hugging Face ----------
-def _answer_huggingface(prompt: str, temperature: float = 0.0) -> str:
+def _answer_huggingface(prompt: str, temperature: float = 0.0, max_tokens: int = 512) -> str:
     """
-    Calls Hugging Face Inference API (works with free/token models).
-    You can set HF_MODEL and HF_API_TOKEN in .env
+    Calls Hugging Face Inference API via InferenceClient.
+    Supports hosted models that allow chat/text generation.
     """
-    url = f"https://api-inference.huggingface.co/models/{HF_MODEL}"
-    headers = {"Content-Type": "application/json"}
-    if HF_API_TOKEN:
-        headers["Authorization"] = f"Bearer {HF_API_TOKEN}"
+    HF_MODEL = os.getenv("HF_MODEL", "mistralai/Mistral-7B-Instruct-v0.3")
+    HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 
-    payload = {"inputs": prompt, "parameters": {"temperature": temperature}}
+    if not HF_API_TOKEN:
+        raise RuntimeError("HF_API_TOKEN environment variable not set")
 
     try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=60)
-        resp.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"Hugging Face API request failed: {e}")
+        # Initialize the client
+        client = InferenceClient(
+            api_key=HF_API_TOKEN,
+            provider="auto"  # automatically selects best provider
+        )
 
-    try:
-        data = resp.json()
-        if isinstance(data, list) and "generated_text" in data[0]:
-            return data[0]["generated_text"].strip()
-        elif isinstance(data, dict) and "generated_text" in data:
-            return data["generated_text"].strip()
-        else:
-            return str(data)
+        # Chat completion
+        completion = client.chat.completions.create(
+            model=HF_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+
+        # Extract the response text
+        answer = completion.choices[0].message["content"]
+        return answer.strip()
+
     except Exception as e:
-        logger.warning(f"Unexpected Hugging Face response format: {e}")
-        return str(resp.text)
-
+        logger.error(f"Hugging Face API request failed: {e}")
+        raise RuntimeError(f"Hugging Face API request failed: {e}")
 
 # ---------- Combined ----------
 def answer_with_context(query: str, context_chunks: List[dict]) -> str:
