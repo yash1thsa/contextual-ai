@@ -12,7 +12,7 @@ import os
 from typing import List
 import requests
 import logging
-from huggingface_hub import InferenceClient
+from huggingface_hub import InferenceClient, InferenceTimeoutError
 
 # Backend selection: hf | sbert | openai | ollama
 ENCODER_BACKEND = os.getenv("ENCODER_BACKEND", "hf")
@@ -49,22 +49,58 @@ def encode_chunks(texts: List[str]) -> List[List[float]]:
 # Hugging Face embedding
 # --------------------------------------------------------------------
 def _encode_hf_remote(texts: List[str]) -> List[List[float]]:
-    HF_EMBED_MODEL = os.getenv("HF_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    """
+    Generates embeddings for a list of text chunks using the
+    huggingface_hub.InferenceClient.
+
+    The client automatically uses the HF_API_TOKEN environment variable.
+
+    Args:
+        texts: A list of string chunks to embed.
+
+    Returns:
+        A list of lists, where each inner list is a float vector embedding
+        corresponding to an input text chunk.
+
+    Raises:
+        RuntimeError: If the HF_API_TOKEN environment variable is not set or the API fails.
+        InferenceTimeoutError: If the API request times out.
+    """
+    # Retrieve API Token and Model Name from environment variables
     HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+    HF_EMBED_MODEL = os.getenv("HF_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+
     if not HF_API_TOKEN:
-        raise RuntimeError("HF_API_TOKEN environment variable not set")
+        raise RuntimeError(
+            "HF_API_TOKEN environment variable not set. Please obtain a token from Hugging Face settings.")
 
-    client = InferenceClient(api_key=HF_API_TOKEN, provider="auto")
-    embeddings = []
+    client = InferenceClient(token=HF_API_TOKEN)
 
-    for text in texts:
-        response = client.feature_extraction(model=HF_EMBED_MODEL, inputs=text)
-        vector = response[0]
-        embeddings.append(vector)
+    try:
+        embeddings = client.feature_extraction(
+            model=HF_EMBED_MODEL,
+            text=texts
+        )
 
-    return embeddings
+        return embeddings
 
-# --------------------------------------------------------------------
+    except InferenceTimeoutError:
+        print("The request timed out while generating embeddings.")
+        raise RuntimeError("Hugging Face API request timed out.")
+    except Exception as e:
+        print(f"An unexpected error occurred with the InferenceClient: {e}")
+        raise RuntimeError(f"API interaction failed: {e}")
+
+
+# Example Usage:
+# Make sure to set your environment variable first:
+# os.environ["HF_API_TOKEN"] = "hf_YOUR_TOKEN_HERE"
+# os.environ["HF_EMBED_MODEL"] = "sentence-transformers/all-MiniLM-L6-v2"
+# texts_to_embed = ["Example sentence one.", "Example sentence two is slightly longer."]
+# embeddings = encode_chunks_with_client(texts_to_embed)
+# print(f"Generated {len(embeddings)} embeddings.")
+
+#------------------------------------------------------------
 # SBERT local embedding
 # --------------------------------------------------------------------
 def _encode_sbert(texts: List[str]):

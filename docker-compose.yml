@@ -8,6 +8,8 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/pdf_ingest
     depends_on:
       - db
+    volumes:
+      - ./backend:/app
 
   frontend:
     build: ./frontend
@@ -31,7 +33,6 @@ services:
       - ./backend/app/db/db_init:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
-
 
 volumes:
   postgres_data:
