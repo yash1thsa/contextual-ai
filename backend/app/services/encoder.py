@@ -11,8 +11,8 @@ Supports multiple backends:
 import os
 from typing import List
 import requests
-import torch
 import logging
+from huggingface_hub import InferenceClient
 
 # Backend selection: hf | sbert | openai | ollama
 ENCODER_BACKEND = os.getenv("ENCODER_BACKEND", "hf")
