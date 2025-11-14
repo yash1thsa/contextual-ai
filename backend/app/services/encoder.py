@@ -51,8 +51,10 @@ def encode_chunks(texts: List[str]) -> List[List[float]]:
 def _encode_hf_remote(texts: List[str]) -> List[List[float]]:
     """
     Encode text using the Hugging Face Inference API (Router).
-    Uses HF embedding models such as sentence-transformers/*.
+    Uses HF embedding models such as sentence-transformers/*, BGE, etc.
     """
+
+    from huggingface_hub import InferenceClient
 
     HF_EMBED_MODEL = os.getenv("HF_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     HF_API_TOKEN = os.getenv("HF_API_TOKEN")
@@ -61,40 +63,36 @@ def _encode_hf_remote(texts: List[str]) -> List[List[float]]:
         raise RuntimeError("HF_API_TOKEN environment variable not set")
 
     logger = logging.getLogger(__name__)
+
+    client = InferenceClient(
+        api_key=HF_API_TOKEN,
+        provider="auto"
+    )
+
     embeddings = []
 
-    try:
-        # Initialize HF router client (same style as your chat model)
-        client = InferenceClient(
-            api_key=HF_API_TOKEN,
-            provider="auto"  # Let HF choose the best backend
-        )
+    logger.info(f"Encoding {len(texts)} texts using HF model '{HF_EMBED_MODEL}'...")
 
-        logger.info(f"Encoding {len(texts)} texts using HF model '{HF_EMBED_MODEL}'...")
+    for text in texts:
+        try:
+            # CORRECT HF EMBEDDING CALL
+            vector = client.feature_extraction(
+                model=HF_EMBED_MODEL,
+                inputs=text
+            )
 
-        for text in texts:
-            try:
-                # HF Embedding endpoint
-                response = client.embeddings.create(
-                    model=HF_EMBED_MODEL,
-                    inputs=text
-                )
+            if not vector or len(vector) == 0:
+                raise RuntimeError("HF returned empty embedding")
 
-                # Extract the vector
-                vector = response.data[0].embedding
-                embeddings.append(vector)
+            embeddings.append(vector)
 
-            except Exception as e:
-                logger.error(f"Failed to encode text '{text[:30]}...': {e}")
-                embeddings.append([])
+        except Exception as e:
+            logger.error(f"Failed to encode text '{text[:30]}...': {e}")
+            raise   # Do NOT append empty vectors. Stop execution.
 
-        logger.info("HF Remote embeddings completed.")
-
-    except Exception as e:
-        logger.error(f"Hugging Face API request failed: {e}")
-        raise RuntimeError(f"Hugging Face API request failed: {e}")
-
+    logger.info("HF Remote embeddings completed.")
     return embeddings
+
 
 # --------------------------------------------------------------------
 # SBERT local embedding
