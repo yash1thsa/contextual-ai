@@ -40,46 +40,61 @@ def encode_chunks(texts: List[str]) -> List[List[float]]:
     elif backend == "ollama":
         return _encode_ollama(texts)
     elif backend == "hf":
-        return _encode_hf_local(texts)
+        return _encode_hf_remote(texts)
     else:
         raise ValueError(f"Unknown ENCODER_BACKEND: {backend}")
 
 
 # --------------------------------------------------------------------
-# Hugging Face LOCAL embedding
+# Hugging Face embedding
 # --------------------------------------------------------------------
-def _encode_hf_local(texts: List[str]) -> List[List[float]]:
+def _encode_hf_remote(texts: List[str]) -> List[List[float]]:
     """
-    Encode text locally using a Hugging Face transformer model.
-    Works offline — no token or API calls needed.
+    Encode text using the Hugging Face Inference API (Router).
+    Uses HF embedding models such as sentence-transformers/*.
     """
-    from transformers import AutoTokenizer, AutoModel
+
+    HF_EMBED_MODEL = os.getenv("HF_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+
+    if not HF_API_TOKEN:
+        raise RuntimeError("HF_API_TOKEN environment variable not set")
+
+    logger = logging.getLogger(__name__)
     embeddings = []
+
     try:
-        logger.info("Initializing local Hugging Face model...")
-        model_name = HF_EMBED_MODEL
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModel.from_pretrained(model_name)
-        logger.info(f"Model '{model_name}' loaded successfully")
+        # Initialize HF router client (same style as your chat model)
+        client = InferenceClient(
+            api_key=HF_API_TOKEN,
+            provider="auto"  # Let HF choose the best backend
+        )
+
+        logger.info(f"Encoding {len(texts)} texts using HF model '{HF_EMBED_MODEL}'...")
 
         for text in texts:
             try:
-                inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
-                with torch.no_grad():
-                    outputs = model(**inputs)
-                    # Mean pooling
-                    emb = outputs.last_hidden_state.mean(dim=1).squeeze().tolist()
-                embeddings.append(emb)
-            except Exception as e:
-                logger.error(f"Error encoding text '{text[:30]}...': {e}")
-                embeddings.append([])  # Append empty list for failed encoding
+                # HF Embedding endpoint
+                response = client.embeddings.create(
+                    model=HF_EMBED_MODEL,
+                    inputs=text
+                )
 
-        logger.info("Embeddings are ready")
+                # Extract the vector
+                vector = response.data[0].embedding
+                embeddings.append(vector)
+
+            except Exception as e:
+                logger.error(f"Failed to encode text '{text[:30]}...': {e}")
+                embeddings.append([])
+
+        logger.info("HF Remote embeddings completed.")
+
     except Exception as e:
-        logger.error(f"Failed to load model or encode texts: {e}")
+        logger.error(f"Hugging Face API request failed: {e}")
+        raise RuntimeError(f"Hugging Face API request failed: {e}")
 
     return embeddings
-
 
 # --------------------------------------------------------------------
 # SBERT local embedding
