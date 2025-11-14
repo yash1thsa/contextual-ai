@@ -49,45 +49,19 @@ def encode_chunks(texts: List[str]) -> List[List[float]]:
 # Hugging Face embedding
 # --------------------------------------------------------------------
 def _encode_hf_remote(texts: List[str]) -> List[List[float]]:
-    from huggingface_hub import InferenceClient
-
     HF_EMBED_MODEL = os.getenv("HF_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     HF_API_TOKEN = os.getenv("HF_API_TOKEN")
-
     if not HF_API_TOKEN:
         raise RuntimeError("HF_API_TOKEN environment variable not set")
 
-    logger = logging.getLogger(__name__)
     client = InferenceClient(api_key=HF_API_TOKEN, provider="auto")
-
     embeddings = []
 
-    logger.info(f"Encoding {len(texts)} texts using HF model '{HF_EMBED_MODEL}'...")
-
     for text in texts:
-        try:
-            # Call HF embedding API
-            response = client.feature_extraction(model=HF_EMBED_MODEL, inputs=text)
+        response = client.feature_extraction(model=HF_EMBED_MODEL, inputs=text)
+        vector = response[0]
+        embeddings.append(vector)
 
-            # Validate structure
-            if (
-                response is None
-                or len(response) == 0
-                or response[0] is None
-                or len(response[0]) == 0
-            ):
-                raise RuntimeError("HF returned empty embedding")
-
-            # Use the inner vector
-            vector = response[0]
-
-            embeddings.append(vector)
-
-        except Exception as e:
-            logger.error(f"Failed to encode text '{text[:30]}...': {e}")
-            raise
-
-    logger.info("HF Remote embeddings completed.")
     return embeddings
 
 # --------------------------------------------------------------------
