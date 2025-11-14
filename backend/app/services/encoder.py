@@ -53,9 +53,6 @@ def _encode_hf_remote(texts: List[str]) -> List[List[float]]:
     Encode text using the Hugging Face Inference API (Router).
     Uses HF embedding models such as sentence-transformers/*, BGE, etc.
     """
-
-    from huggingface_hub import InferenceClient
-
     HF_EMBED_MODEL = os.getenv("HF_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 
@@ -64,9 +61,11 @@ def _encode_hf_remote(texts: List[str]) -> List[List[float]]:
 
     logger = logging.getLogger(__name__)
 
+    # Create client *for a specific model*
     client = InferenceClient(
+        model=HF_EMBED_MODEL,
         api_key=HF_API_TOKEN,
-        provider="auto"
+        provider="auto",
     )
 
     embeddings = []
@@ -75,11 +74,13 @@ def _encode_hf_remote(texts: List[str]) -> List[List[float]]:
 
     for text in texts:
         try:
-            # CORRECT HF EMBEDDING CALL
-            vector = client.feature_extraction(
-                model=HF_EMBED_MODEL,
-                inputs=text
-            )
+            # HF expects just text (NOT inputs=)
+            vector = client.feature_extraction(text)
+
+            # Normalize HF output
+            if isinstance(vector, list) and isinstance(vector[0], list):
+                # HF sometimes returns [[dim]]
+                vector = vector[0]
 
             if not vector or len(vector) == 0:
                 raise RuntimeError("HF returned empty embedding")
@@ -88,11 +89,10 @@ def _encode_hf_remote(texts: List[str]) -> List[List[float]]:
 
         except Exception as e:
             logger.error(f"Failed to encode text '{text[:30]}...': {e}")
-            raise   # Do NOT append empty vectors. Stop execution.
+            raise   # Stop execution, do not append empty vectors.
 
     logger.info("HF Remote embeddings completed.")
     return embeddings
-
 
 # --------------------------------------------------------------------
 # SBERT local embedding
