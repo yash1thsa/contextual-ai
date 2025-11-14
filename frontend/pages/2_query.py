@@ -1,6 +1,6 @@
 import streamlit as st
 import requests
-import json
+import os
 
 st.set_page_config(page_title="Chatbot", page_icon="💬")
 
@@ -47,7 +47,8 @@ with st.form(key="chat_form", clear_on_submit=True):
 
         try:
             # Send request to backend
-            resp = requests.post("http://backend:8000/query", json=payload, timeout=30)
+            CONTEXTUAL_API = os.getenv("CONTEXTUAL_API", "https://contextual-ai-cw79.onrender.com/")
+            resp = requests.post(f"{CONTEXTUAL_API}/query", json=payload, timeout=30)
             if resp.status_code == 200:
                 data = resp.json()
                 # Attempt to extract answer from common fields
