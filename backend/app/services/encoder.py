@@ -49,10 +49,8 @@ def encode_chunks(texts: List[str]) -> List[List[float]]:
 # Hugging Face embedding
 # --------------------------------------------------------------------
 def _encode_hf_remote(texts: List[str]) -> List[List[float]]:
-    """
-    Encode text using the Hugging Face Inference API (Router).
-    Uses HF embedding models such as sentence-transformers/*, BGE, etc.
-    """
+    from huggingface_hub import InferenceClient
+
     HF_EMBED_MODEL = os.getenv("HF_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 
@@ -60,13 +58,7 @@ def _encode_hf_remote(texts: List[str]) -> List[List[float]]:
         raise RuntimeError("HF_API_TOKEN environment variable not set")
 
     logger = logging.getLogger(__name__)
-
-    # Create client *for a specific model*
-    client = InferenceClient(
-        model=HF_EMBED_MODEL,
-        api_key=HF_API_TOKEN,
-        provider="auto",
-    )
+    client = InferenceClient(api_key=HF_API_TOKEN, provider="auto")
 
     embeddings = []
 
@@ -74,22 +66,26 @@ def _encode_hf_remote(texts: List[str]) -> List[List[float]]:
 
     for text in texts:
         try:
-            # HF expects just text (NOT inputs=)
-            vector = client.feature_extraction(text)
+            # Call HF embedding API
+            response = client.feature_extraction(model=HF_EMBED_MODEL, inputs=text)
 
-            # Normalize HF output
-            if isinstance(vector, list) and isinstance(vector[0], list):
-                # HF sometimes returns [[dim]]
-                vector = vector[0]
-
-            if not vector or len(vector) == 0:
+            # Validate structure
+            if (
+                response is None
+                or len(response) == 0
+                or response[0] is None
+                or len(response[0]) == 0
+            ):
                 raise RuntimeError("HF returned empty embedding")
+
+            # Use the inner vector
+            vector = response[0]
 
             embeddings.append(vector)
 
         except Exception as e:
             logger.error(f"Failed to encode text '{text[:30]}...': {e}")
-            raise   # Stop execution, do not append empty vectors.
+            raise
 
     logger.info("HF Remote embeddings completed.")
     return embeddings
