@@ -30,7 +30,7 @@ if st.button("Upload PDFs"):
             try:
                 # Send file to backend
                 files = {"file": (pdf_file.name, pdf_file, "application/pdf")}
-                resp = requests.post("http://backend:8000/upload/pdf", files=files, timeout=60)
+                resp = requests.post("https://contextual-ai-cw79.onrender.com/upload/pdf", files=files, timeout=60)
 
                 if resp.status_code == 200:
                     st.success(f"✅ Successfully uploaded {pdf_file.name}")
